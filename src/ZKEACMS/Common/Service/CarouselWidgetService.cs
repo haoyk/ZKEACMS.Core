@@ -1,16 +1,16 @@
-/* http://www.zkea.net/ Copyright 2016 ZKEASOFT http://www.zkea.net/licenses */
+/* http://www.zkea.net/ 
+ * Copyright 2017 ZKEASOFT 
+ * http://www.zkea.net/licenses */
+
+using Easy;
+using Easy.Constant;
+using Easy.Extend;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Linq;
 using ZKEACMS.Common.Models;
-using Easy.Constant;
-using Easy.Extend;
 using ZKEACMS.Widget;
-using Microsoft.AspNetCore.Http;
-using Easy;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.EntityFrameworkCore;
-using System;
-using Microsoft.AspNetCore.Mvc;
 
 namespace ZKEACMS.Common.Service
 {
@@ -81,18 +81,9 @@ namespace ZKEACMS.Common.Service
             var carouselWidget = widget as CarouselWidget;
             if (carouselWidget.CarouselID.HasValue)
             {
-                var varouselItems = _carouselItemService.Get(m => m.CarouselID == carouselWidget.CarouselID).ToList();
-                if (carouselWidget.CarouselItems == null)
-                {
-                    carouselWidget.CarouselItems = varouselItems;
-                }
-                else
-                {
-                    ((List<CarouselItemEntity>)carouselWidget.CarouselItems).AddRange(varouselItems);
-                }
+                carouselWidget.CarouselItems = _carouselItemService.Get(m => m.CarouselID == carouselWidget.CarouselID).ToList();
             }
-            carouselWidget.CarouselItems =
-                carouselWidget.CarouselItems.Where(m => m.Status == (int)RecordStatus.Active);
+            carouselWidget.CarouselItems = carouselWidget.CarouselItems.Where(m => m.Status == (int)RecordStatus.Active);
             return base.Display(widget, actionContext);
         }
     }

@@ -1,4 +1,5 @@
 using Easy.LINQ;
+using Easy.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using System;
@@ -50,7 +51,7 @@ namespace Easy.RepositoryPattern
                     action.Invoke();
                     transaction.Commit();
                 }
-                catch(Exception ex)
+                catch (Exception ex)
                 {
                     transaction.Rollback();
                     throw ex;
@@ -60,11 +61,28 @@ namespace Easy.RepositoryPattern
 
         public virtual void Add(T item)
         {
+            var editor = item as EditorEntity;
+            if (editor != null && ApplicationContext.CurrentUser != null)
+            {
+                editor.CreateBy = ApplicationContext.CurrentUser.UserID;
+                editor.CreatebyName = ApplicationContext.CurrentUser.UserName;
+                editor.CreateDate = DateTime.Now;
+            }
             CurrentDbSet.Add(item);
             DbContext.SaveChanges();
         }
         public virtual void AddRange(params T[] items)
         {
+            foreach (var item in items)
+            {
+                var editor = item as EditorEntity;
+                if (editor != null && ApplicationContext.CurrentUser != null)
+                {
+                    editor.CreateBy = ApplicationContext.CurrentUser.UserID;
+                    editor.CreatebyName = ApplicationContext.CurrentUser.UserName;
+                    editor.CreateDate = DateTime.Now;
+                }
+            }
             CurrentDbSet.AddRange(items);
             DbContext.SaveChanges();
         }
@@ -78,6 +96,7 @@ namespace Easy.RepositoryPattern
         }
         public virtual IEnumerable<T> Get(Expression<Func<T, bool>> filter)
         {
+            if (filter == null) return GetAll();
             return CurrentDbSet.Where(filter);
         }
         public virtual IEnumerable<T> Get(Expression<Func<T, bool>> filter, Pagination pagination)
@@ -104,13 +123,33 @@ namespace Easy.RepositoryPattern
             }
             return CurrentDbSet.Count();
         }
-        public virtual void Update(T item)
+        public virtual void Update(T item, bool saveImmediately = true)
         {
+            var editor = item as EditorEntity;
+            if (editor != null && ApplicationContext.CurrentUser != null)
+            {
+                editor.LastUpdateBy = ApplicationContext.CurrentUser.UserID;
+                editor.LastUpdateByName = ApplicationContext.CurrentUser.UserName;
+                editor.LastUpdateDate = DateTime.Now;
+            }
             CurrentDbSet.Update(item);
-            DbContext.SaveChanges();
+            if (saveImmediately)
+            {
+                DbContext.SaveChanges();
+            }
         }
         public virtual void UpdateRange(params T[] items)
         {
+            foreach (var item in items)
+            {
+                var editor = item as EditorEntity;
+                if (editor != null && ApplicationContext.CurrentUser != null)
+                {
+                    editor.LastUpdateBy = ApplicationContext.CurrentUser.UserID;
+                    editor.LastUpdateByName = ApplicationContext.CurrentUser.UserName;
+                    editor.LastUpdateDate = DateTime.Now;
+                }
+            }
             CurrentDbSet.UpdateRange(items);
             DbContext.SaveChanges();
         }
@@ -122,10 +161,14 @@ namespace Easy.RepositoryPattern
                 Remove(item);
             }
         }
-        public virtual void Remove(T item)
+        public virtual void Remove(T item, bool saveImmediately = true)
         {
             CurrentDbSet.Remove(item);
-            DbContext.SaveChanges();
+            if (saveImmediately)
+            {
+                DbContext.SaveChanges();
+            }
+            
         }
         public virtual void Remove(Expression<Func<T, bool>> filter)
         {
@@ -140,7 +183,12 @@ namespace Easy.RepositoryPattern
         }
         public virtual void Dispose()
         {
-            DbContext.Dispose();
+            //DbContext.Dispose();
+        }
+
+        public void SaveChanges()
+        {
+            DbContext.SaveChanges();
         }
     }
 }

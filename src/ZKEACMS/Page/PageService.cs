@@ -17,15 +17,14 @@ namespace ZKEACMS.Page
     public class PageService : ServiceBase<PageEntity, CMSDbContext>, IPageService
     {
         private readonly IWidgetBasePartService _widgetService;
-        private readonly IDataArchivedService _dataArchivedService;
+        private readonly IWidgetActivator _widgetActivator;
 
 
-
-        public PageService(IWidgetBasePartService widgetService, IDataArchivedService dataArchivedService, IApplicationContext applicationContext)
+        public PageService(IWidgetBasePartService widgetService, IApplicationContext applicationContext, IWidgetActivator widgetActivator)
             : base(applicationContext)
         {
             _widgetService = widgetService;
-            _dataArchivedService = dataArchivedService;
+            _widgetActivator = widgetActivator;
         }
         public override DbSet<PageEntity> CurrentDbSet
         {
@@ -48,14 +47,14 @@ namespace ZKEACMS.Page
             base.Add(item);
         }
 
-        public override void Update(PageEntity item)
+        public override void Update(PageEntity item, bool saveImmediately = true)
         {
             if (Count(m => m.ID != item.ID && m.Url == item.Url && m.IsPublishedPage == false) > 0)
             {
                 throw new PageExistException(item);
             }
             item.IsPublish = false;
-            base.Update(item);
+            base.Update(item, saveImmediately);
         }
 
         public void Publish(PageEntity item)
@@ -67,7 +66,7 @@ namespace ZKEACMS.Page
 
             //Remove(m => m.ReferencePageID == item.ID && m.IsPublishedPage == true);
 
-            _dataArchivedService.Remove(CacheTrigger.PageWidgetsArchivedKey.FormatWith(item.ID));
+            _widgetService.RemoveCache(item.ID);
 
             item.ReferencePageID = item.ID;
             item.IsPublishedPage = true;
@@ -80,7 +79,7 @@ namespace ZKEACMS.Page
             Add(item);
             widgets.Each(m =>
             {
-                using (var widgetService = m.CreateServiceInstance(ApplicationContext.ServiceLocator))
+                using (var widgetService = _widgetActivator.Create(m))
                 {
                     m = widgetService.GetWidget(m);
                     if (m.ExtendFields != null)
@@ -126,7 +125,7 @@ namespace ZKEACMS.Page
                 var widgets = _widgetService.GetByPageId(ID);
                 widgets.Each(m =>
                 {
-                    var widgetService = m.CreateServiceInstance(ApplicationContext.ServiceLocator);
+                    var widgetService = _widgetActivator.Create(m);
                     m = widgetService.GetWidget(m);
                     if (m.ExtendFields != null)
                     {
@@ -139,16 +138,19 @@ namespace ZKEACMS.Page
                 {
                     Publish(page);
                 }
-
+                else
+                {
+                    _widgetService.RemoveCache(page.ReferencePageID);
+                }
             }
         }
-        public override void Remove(PageEntity item)
+        public override void Remove(PageEntity item, bool saveImmediately = true)
         {
             Remove(m => m.ParentId == item.ID);
-            var widgets = _widgetService.Get(m => m.PageID == item.ID);
+            var widgets = _widgetService.GetByPageId(item.ID);
             widgets.Each(m =>
             {
-                using (var widgetService = m.CreateServiceInstance(ApplicationContext.ServiceLocator))
+                using (var widgetService = _widgetActivator.Create(m))
                 {
                     widgetService.DeleteWidget(m.ID);
                 }
@@ -157,10 +159,10 @@ namespace ZKEACMS.Page
             {
                 Remove(m => m.ReferencePageID == item.ID);
             }
-            _dataArchivedService.Remove(CacheTrigger.PageWidgetsArchivedKey.FormatWith(item.ID));
-            base.Remove(item);
+            _widgetService.RemoveCache(item.ID);
+            base.Remove(item, saveImmediately);
         }
-        
+
         public override void Remove(Expression<Func<PageEntity, bool>> filter)
         {
             var deletes = Get(filter).ToList(m => m.ID);
@@ -169,16 +171,16 @@ namespace ZKEACMS.Page
                 Remove(m => deletes.Any(d => d == m.ParentId));
                 Remove(m => deletes.Any(d => d == m.ReferencePageID));
 
-                var widgets = _widgetService.Get(m => deletes.Any(n => n == m.PageID));
+                var widgets = _widgetService.Get(m => deletes.Any(n => n == m.PageID)).ToList();
                 widgets.Each(m =>
                 {
-                    using (var widgetService = m.CreateServiceInstance(ApplicationContext.ServiceLocator))
+                    using (var widgetService = _widgetActivator.Create(m))
                     {
                         widgetService.DeleteWidget(m.ID);
                     }
                 });
 
-                deletes.Each(p => _dataArchivedService.Remove(CacheTrigger.PageWidgetsArchivedKey.FormatWith(p)));
+                deletes.Each(p => _widgetService.RemoveCache(p));
 
                 base.Remove(filter);
             }
@@ -186,7 +188,7 @@ namespace ZKEACMS.Page
         }
         public override void RemoveRange(params PageEntity[] items)
         {
-            items.Each(Remove);
+            items.Each(m => Remove(m));
         }
 
         public void DeleteVersion(string ID)
@@ -194,9 +196,9 @@ namespace ZKEACMS.Page
             PageEntity page = Get(ID);
             if (page != null)
             {
-                var widgets = _widgetService.Get(m => m.PageID == page.ID);
-                widgets.Each(m => m.CreateServiceInstance(ApplicationContext.ServiceLocator).DeleteWidget(m.ID));
-                _dataArchivedService.Remove(CacheTrigger.PageWidgetsArchivedKey.FormatWith(page.ID));
+                var widgets = _widgetService.GetByPageId(page.ID);
+                widgets.Each(m => _widgetActivator.Create(m).DeleteWidget(m.ID));
+                _widgetService.RemoveCache(ID);
             }
             base.Remove(ID);
         }
@@ -232,22 +234,26 @@ namespace ZKEACMS.Page
             {
                 path = path.Substring(0, path.Length - 1);
             }
-
-            var pages = CurrentDbSet.Where(m => m.IsPublishedPage == !isPreView);
             if (path == "/")
             {
-                path = "~/index";
+                path = "/index";
             }
-            else
+            if (!path.StartsWith("~"))
             {
-                pages = pages.Where(m => m.Url == (path.StartsWith("~") ? "" : "~") + path);
+                path = "~" + path;
             }
+            var result = CurrentDbSet
+                .Where(m => m.Url == path && m.IsPublishedPage == !isPreView)
+                .OrderByDescending(m => m.PublishDate)
+                .FirstOrDefault();
 
-            pages = pages.OrderByDescending(m => m.PublishDate);
-            var result = pages.FirstOrDefault();
             if (result != null && result.ExtendFields != null)
             {
-                /* http://www.zkea.net/ Copyright 2016 ZKEASOFT http://www.zkea.net/licenses */
+                /*!
+                 * http://www.zkea.net/ 
+                 * Copyright 2017 ZKEASOFT 
+                 * http://www.zkea.net/licenses 
+                 */
                 ((List<ExtendFieldEntity>)result.ExtendFields).Add(new ExtendFieldEntity { Title = "meta_support", Value = "ZKEASOFT" });
             }
             return result;
@@ -257,10 +263,17 @@ namespace ZKEACMS.Page
         public void MarkChanged(string pageId)
         {
             var pageEntity = Get(pageId);
-            pageEntity.IsPublish = false;
-            pageEntity.LastUpdateDate = DateTime.Now;
-            pageEntity.LastUpdateBy = ApplicationContext.CurrentUser.UserID;
-            base.Update(pageEntity);
+            if (pageEntity != null)
+            {
+                pageEntity.IsPublish = false;
+                pageEntity.LastUpdateDate = DateTime.Now;
+                if (ApplicationContext.CurrentUser != null)
+                {
+                    pageEntity.LastUpdateBy = ApplicationContext.CurrentUser.UserID;
+                    pageEntity.LastUpdateByName = ApplicationContext.CurrentUser.UserName;
+                }
+                base.Update(pageEntity);
+            }
         }
     }
 }

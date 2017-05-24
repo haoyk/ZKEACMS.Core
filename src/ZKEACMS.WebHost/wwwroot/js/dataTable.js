@@ -83,6 +83,9 @@
             initComplete: function () {
                 this.api().columns().every(function () {
                     var column = this;
+                    if (!column.settings()[0].columnSettings) {
+                        return;
+                    }
                     var columnSetting = column.settings()[0].columnSettings[column[0][0]];
                     if (columnSetting.searchOpeartor != "None") {
                         var option = columnSetting.option;
@@ -143,7 +146,14 @@
             $(".form-control", $(this).closest(".search")).each(function () {
                 $(this).val("");
             }).first().trigger("change");
-
+        }).on("click", ".glyphicon.glyphicon-remove", function () {
+            var link = $(this);
+            Easy.ShowMessageBox("提示", "确认删除该数据吗？", function () {
+                $.post(link.attr("href"), function () {
+                    link.trigger("change");
+                });
+            })
+            return false;
         });
     });
 });

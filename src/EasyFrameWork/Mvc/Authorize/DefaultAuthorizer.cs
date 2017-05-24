@@ -36,6 +36,10 @@ namespace Easy.Mvc.Authorize
             {
                 return true;
             }
+            if(user == null)
+            {
+                return false;
+            }
             if (_userPermissions != null && _userPermissions.ContainsKey(user.UserID))
             {
                 return _userPermissions[user.UserID].Any(m => m.PermissionKey == permission);

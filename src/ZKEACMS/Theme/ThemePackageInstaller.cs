@@ -25,13 +25,28 @@ namespace ZKEACMS.Theme
                 return "ThemePackageInstaller";
             }
         }
+        private string ResetPath(string path)
+        {
+            return path.Replace("~/Themes", ThemePath);
+        }
         public override object Install(Package package)
         {
+            var filePackage = package as FilePackage;
+            if (filePackage != null && filePackage.Files != null)
+            {
+                filePackage.Files.ForEach(file =>
+                {
+                    file.FilePath = ResetPath(file.FilePath);
+                });
+            }
             base.Install(package);
             var themePackage = package as ThemePackage;
             if (themePackage != null)
             {
                 var newTheme = themePackage.Theme;
+                newTheme.Url = ResetPath(newTheme.Url);
+                newTheme.UrlDebugger = ResetPath(newTheme.UrlDebugger);
+                newTheme.Thumbnail = ResetPath(newTheme.Thumbnail);
                 newTheme.IsActived = false;
                 if (_themeService.Count(m => m.ID == newTheme.ID) == 0)
                 {
@@ -40,11 +55,12 @@ namespace ZKEACMS.Theme
                 else
                 {
                     var oldTheme = _themeService.Get(newTheme.ID);
-                    if (oldTheme.IsActived)
-                    {
-                        newTheme.IsActived = true;
-                    }
-                    _themeService.Update(newTheme);
+                    oldTheme.Description = newTheme.Description;
+                    oldTheme.Thumbnail = newTheme.Thumbnail;
+                    oldTheme.Title = newTheme.Title;
+                    oldTheme.Url = newTheme.Url;
+                    oldTheme.UrlDebugger = newTheme.UrlDebugger;
+                    _themeService.Update(oldTheme);
                 }
             }
             return package;

@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Easy.Extend;
 
 namespace Easy.Mvc.Authorize
 {
@@ -16,10 +17,9 @@ namespace Easy.Mvc.Authorize
         {
             await Task.Factory.StartNew(() =>
             {
-                var serviceLocator = new ServiceLocator();
-                var authorizer = serviceLocator.GetService<IAuthorizer>();
-                var userService = serviceLocator.GetService<IUserService>();
-                if (authorizer.Authorize(Policy, userService.Get(context.User.Identity.Name)))
+                var authorizer = ServiceLocator.GetService<IAuthorizer>();
+                var applicationContext = ServiceLocator.GetService<IApplicationContext>();
+                if (authorizer.Authorize(Policy, applicationContext.CurrentUser))
                 {
                     context.Succeed(requirement);
                 }
@@ -27,7 +27,6 @@ namespace Easy.Mvc.Authorize
                 {
                     context.Fail();
                 }
-                userService.Dispose();
             });
 
         }

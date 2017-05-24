@@ -46,11 +46,11 @@ namespace ZKEACMS.Article.Service
             Expression<Func<ArticleEntity, bool>> filter = null;
             if (cate != 0)
             {
-                filter = m =>m.IsPublish && m.ArticleTypeID == cate;
+                filter = m => m.IsPublish && m.ArticleTypeID == cate;
             }
             else
             {
-                var ids = _articleTypeService.Get(m => m.ParentID == currentWidget.ArticleTypeID).Select(m => m.ID);
+                var ids = _articleTypeService.Get(m =>m.ID==currentWidget.ArticleTypeID || m.ParentID == currentWidget.ArticleTypeID).Select(m => m.ID);
                 if (ids.Any())
                 {
                     filter = m => m.IsPublish && ids.Any(id => id == m.ArticleTypeID);
@@ -63,14 +63,15 @@ namespace ZKEACMS.Article.Service
             }
             if (currentWidget.IsPageable)
             {
-                articles = _articleService.Get(filter, page);
+                page.RecordCount = _articleService.Count(filter);
+                articles = _articleService.Get(filter).OrderByDescending(m => m.ID).Skip(page.PageIndex * page.PageSize).Take(page.PageSize); ;
             }
             else
             {
-                articles = _articleService.Get(filter);
+                articles = _articleService.Get(filter).OrderByDescending(m => m.ID);
             }
 
-            
+
             return widget.ToWidgetViewModelPart(new ArticleListWidgetViewModel
             {
                 Articles = articles,

@@ -1,7 +1,6 @@
-/* http://www.zkea.net/ Copyright 2016 ZKEASOFT http://www.zkea.net/licenses */
 /*!
  * http://www.zkea.net/
- * Copyright 2016 ZKEASOFT
+ * Copyright 2017 ZKEASOFT
  * http://www.zkea.net/licenses
  */
 
@@ -12,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using ZKEACMS.Article.ActionFilter;
 using ZKEACMS.Article.Models;
 using ZKEACMS.Article.Service;
+using Easy.Extend;
 
 namespace ZKEACMS.Article.Controllers
 {
@@ -54,6 +54,10 @@ namespace ZKEACMS.Article.Controllers
             if (entity.ActionType == ActionType.Publish)
             {
                 Service.Publish(entity.ID);
+                if (Request.Query["ReturnUrl"].Count > 0)
+                {
+                    return Redirect(Request.Query["ReturnUrl"]);
+                }
             }
             return result;
         }
@@ -63,9 +67,9 @@ namespace ZKEACMS.Article.Controllers
             return base.GetList(query);
         }
         [DefaultAuthorize(Policy = PermissionKeys.ManageArticle)]
-        public override JsonResult Delete(string ids)
+        public override JsonResult Delete(int id)
         {
-            return base.Delete(ids);
+            return base.Delete(id);
         }
     }
 }

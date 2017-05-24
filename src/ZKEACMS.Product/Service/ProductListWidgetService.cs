@@ -57,7 +57,7 @@ namespace ZKEACMS.Product.Service
             }
             else
             {
-                var ids = _productCategoryService.Get(m => m.ParentID == pwidget.ProductCategoryID).Select(m => m.ID);
+                var ids = _productCategoryService.Get(m => m.ID == pwidget.ProductCategoryID || m.ParentID == pwidget.ProductCategoryID).Select(m => m.ID);
                 if (ids.Any())
                 {
                     filter = m => m.IsPublish && ids.Any(id => id == m.ProductCategoryID);
@@ -69,13 +69,14 @@ namespace ZKEACMS.Product.Service
             }
             if (pwidget.IsPageable)
             {
-                products = _productService.Get(m => m.IsPublish == true, page);
+                page.RecordCount = _productService.Count(filter);
+                products = _productService.Get(filter).OrderBy(m=>m.OrderIndex).ThenByDescending(m => m.ID).Skip(page.PageIndex * page.PageSize).Take(page.PageSize);
             }
             else
             {
-                products = _productService.Get(m => m.IsPublish == true);
+                products = _productService.Get(filter).OrderBy(m => m.OrderIndex).ThenByDescending(m => m.ID);
             }
-            
+
             return widget.ToWidgetViewModelPart(new ProductListWidgetViewModel
             {
                 Products = products,
